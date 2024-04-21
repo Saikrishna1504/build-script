@@ -10,9 +10,6 @@ CONFIG_CHATID="-"
 CONFIG_BOT_TOKEN=""
 CONFIG_ERROR_CHATID=""
 
-# PixelDrain api keys to upload builds
-CONFIG_PDUP_API=""
-
 # Turning off server after build or no
 POWEROFF=""
 
@@ -128,10 +125,11 @@ pin_message() {
 }
 
 upload_file() {
-    RESPONSE=$(curl -T "$1" -u :"$CONFIG_PDUP_API" https://pixeldrain.com/api/file/)
-    HASH=$(echo "$RESPONSE" | grep -Po '(?<="id":")[^"]*')
+    SERVER=$(curl -X GET 'https://api.gofile.io/servers' | grep -Po '(store*)[^"]*' | tail -n 1)
+    RESPONSE=$(curl -X POST https://${SERVER}.gofile.io/contents/uploadfile -F "file=@$1")
+    HASH=$(echo "$RESPONSE" | grep -Po '(https://gofile.io/d/)[^"]*')
 
-    echo "https://pixeldrain.com/u/$HASH"
+    echo "$HASH"
 }
 
 send_message_to_error_chat() {
