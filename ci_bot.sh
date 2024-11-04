@@ -137,8 +137,8 @@ send_message_to_error_chat() {
         -d "parse_mode=html" \
         -d "disable_web_page_preview=true" \
         -d text="$1")
-    local MESSAGE_ID=$(echo "$RESPONSE" | grep -o '"message_id":[0-9]*' | cut -d':' -f2)
-    echo "$MESSAGE_ID"
+    local message_id=$(echo "$response" | grep -o '"message_id":[0-9]*' | cut -d':' -f2)                 
+    echo "$message_id"
 }
 
 send_file_to_error_chat() {
