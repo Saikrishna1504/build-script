@@ -262,8 +262,7 @@ echo -e "$BOLD_GREEN\nSetting up the build environment...$RESET"
 source build/envsetup.sh
 
 if [ $? -eq 0 ]; then
-    echo -e "$BOLD_GREEN\nStarting to build now...$RESET"
-    m installclean -j$CONFIG_COMPILE_JOBS
+    echo -e "$BOLD_GREEN\nStarting to build now...$RESET" 
     brunch "$DEVICE" "$VARIANT" 2>&1 | tee -a "$ROOT_DIRECTORY/build.log" &
 else
     echo -e "$RED\nFailed to brunch "$DEVICE"$RESET"
