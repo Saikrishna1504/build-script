@@ -38,6 +38,9 @@ while [[ $# -gt 0 ]]; do
     --c-d | --clean-device)
         CLEAN_DEVICE="1"
         ;;
+    --d-o | --disk-optimization)
+        DISK_OPTIMIZATION="1"
+        ;;
     -o | --official)
         if [ -n "$CONFIG_OFFICIAL_FLAG" ]; then
             OFFICIAL="1"
@@ -57,10 +60,11 @@ Mandatory options:
     No option is mandatory!, just simply run the script without passing any parameter.
 
 Options:
-    -s, --sync            Sync sources before building.
-    -c, --clean           Clean build directory before compilation.
-    --c-d, --clean-device Clean device build directory before compilation.
-    -o, --official        Build the official variant during compilation.\n"
+    -s, --sync                 Sync sources before building.
+    -c, --clean                Clean build directory before compilation.
+    --c-d, --clean-device      Clean device build directory before compilation.
+    --d-o, --disk-optimization Optimize disk before compilation. Build will not fail even if disk optimization script fails.
+    -o, --official             Build the official variant during compilation.\n"
         exit 1
         ;;
     *)
@@ -174,6 +178,20 @@ fi
 
 if [ -f "$ROOT_DIRECTORY/build.log" ]; then
     rm -f "$ROOT_DIRECTORY/build.log"
+fi
+
+if [[ -n $DISK_OPTIMIZATION ]]; then
+    # Include disk optimization script
+    if [ -e "$HOME/io.sh" ]; then
+        bash $HOME/io.sh
+        echo -e "$BOLD_GREEN\nDisk optimization successful, continuing to proceed further...$RESET\n"
+    else
+        if ! bash <(curl -s https://raw.githubusercontent.com/KanishkTheDerp/scripts/master/io.sh); then
+            echo -e "$BOLD_GREEN\nDisk optimization failed, continuing to proceed further...$RESET\n"
+        else
+            echo -e "$BOLD_GREEN\nDisk optimization successful, continuing to proceed further...$RESET\n"
+        fi
+    fi
 fi
 
 # Jobs Configuration. Determine the number of cores to be used.
