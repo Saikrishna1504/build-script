@@ -23,7 +23,7 @@ ROOT_DIRECTORY="$(pwd)"
 
 # Post Constants. Required variables for posting purposes.
 ROM_NAME="$(sed "s#.*/##" <<<"$(pwd)")"
-ANDROID_VERSION=$(grep 'PLATFORM_VERSION := ' build/make/core/version_defaults.mk | awk '{print $3}')
+ANDROID_VERSION=$(grep -oP '(?<=android-)[0-9]+' .repo/manifests/default.xml | head -n1)
 OUT="$(pwd)/out/target/product/$DEVICE"
 STICKER_URL="https://index.sauraj.eu.org/api/raw/?path=/sticker.webp"
 
@@ -208,6 +208,7 @@ if [[ -n $SYNC ]]; then
 
 <b>• ROM:</b> <code>$ROM_NAME</code>
 <b>• DEVICE:</b> <code>$DEVICE</code>
+<b>• ANDROID VERSION:</b> <code>$ANDROID_VERSION</code>
 <b>• JOBS:</b> <code>$CONFIG_SYNC_JOBS Cores</code>
 <b>• DIRECTORY:</b> <code>$(pwd)</code>"
 
@@ -237,6 +238,7 @@ if [[ -n $SYNC ]]; then
 
 <b>• ROM:</b> <code>$ROM_NAME</code>
 <b>• DEVICE:</b> <code>$DEVICE</code>
+<b>• ANDROID VERSION:</b> <code>$ANDROID_VERSION</code>
 <b>• JOBS:</b> <code>$CONFIG_SYNC_JOBS Cores</code>
 <b>• DIRECTORY:</b> <code>$(pwd)</code>
 
@@ -306,6 +308,7 @@ until [ -z "$(jobs -r)" ]; do
 
 <b>• ROM:</b> <code>$ROM_NAME</code>
 <b>• DEVICE:</b> <code>$DEVICE</code>
+<b>• ANDROID VERSION:</b> <code>$ANDROID_VERSION</code>
 <b>• JOBS:</b> <code>$CONFIG_COMPILE_JOBS Cores</code>
 <b>• TYPE:</b> <code>$([ "$OFFICIAL" == "1" ] && echo "Official" || echo "Unofficial")</code>
 <b>• PROGRESS:</b> <code>$(fetch_progress)</code>"
