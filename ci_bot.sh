@@ -221,10 +221,10 @@ if [[ -n $SYNC ]]; then
         if ! repo sync --force-sync; then
             echo -e "$RED\nSyncing has failed completely!$RESET" && echo -e "$BOLD_GREEN\nStarting the build now...$RESET\n"
         else
-            SYNC_END=$(TZ=Asia/Dhaka date +"%s")
+            SYNC_END=$(TZ=Asia/Kolkata date +"%s")
         fi
     else
-        SYNC_END=$(TZ=Asia/Dhaka date +"%s")
+        SYNC_END=$(TZ=Asia/Kolkata date +"%s")
     fi
 
     if [[ -n $SYNC_END ]]; then
@@ -273,7 +273,7 @@ build_start_message="🟡 | <i>Compiling ROM...</i>
 
 build_message_id=$(send_message "$build_start_message" "$CONFIG_CHATID")
 
-BUILD_START=$(TZ=Asia/Dhaka date +"%s")
+BUILD_START=$(TZ=Asia/Kolkata date +"%s")
 
 # Start Compilation. Compile the ROM according to the configuration.
 echo -e "$BOLD_GREEN\nSetting up the build environment...$RESET"
@@ -326,7 +326,7 @@ build_progress_message="🟡 | <i>Compiling ROM...</i>
 edit_message "$build_progress_message" "$CONFIG_CHATID" "$build_message_id"
 
 # Upload Build. Upload the output ROM files to the index.
-BUILD_END=$(TZ=Asia/Dhaka date +"%s")
+BUILD_END=$(TZ=Asia/Kolkata date +"%s")
 DIFFERENCE=$((BUILD_END - BUILD_START))
 HOURS=$(($DIFFERENCE / 3600))
 MINUTES=$((($DIFFERENCE % 3600) / 60))
