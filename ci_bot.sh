@@ -101,6 +101,7 @@ send_message() {
 edit_message() {
     curl "$BOT_EDIT_MESSAGE_URL" -d chat_id="$2" \
         -d "parse_mode=html" \
+        -d "disable_web_page_preview=true" \
         -d "message_id=$3" \
         -d text="$1"
 }
