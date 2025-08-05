@@ -18,7 +18,6 @@ YELLOW=$(tput setaf 3)
 BOLD=$(tput bold)
 RESET=$(tput sgr0)
 BOLD_GREEN=${BOLD}$(tput setaf 2)
-OFFICIAL="0"
 ROOT_DIRECTORY="$(pwd)"
 
 # Post Constants. Required variables for posting purposes.
@@ -42,14 +41,6 @@ while [[ $# -gt 0 ]]; do
     --d-o | --disk-optimization)
         DISK_OPTIMIZATION="1"
         ;;
-    -o | --official)
-        if [ -n "$CONFIG_OFFICIAL_FLAG" ]; then
-            OFFICIAL="1"
-        else
-            echo -e "$RED\nERROR: Please specify the flag to export for official build in the configuration!!$RESET\n"
-            exit 1
-        fi
-        ;;
     -h | --help)
         echo -e "\nNote: • You should specify all the mandatory variables in the script!
       • Just run "./$0" for normal build
@@ -64,8 +55,7 @@ Options:
     -s, --sync                 Sync sources before building.
     -c, --clean                Clean build directory before compilation.
     --c-d, --clean-device      Clean device build directory before compilation.
-    --d-o, --disk-optimization Optimize disk before compilation. Build will not fail even if disk optimization script fails.
-    -o, --official             Build the official variant during compilation.\n"
+    --d-o, --disk-optimization Optimize disk before compilation. Build will not fail even if disk optimization script fails.\n"
         exit 1
         ;;
     *)
@@ -273,7 +263,7 @@ build_start_message="🟡 | <i>Compiling ROM...</i>
 <b>• DEVICE:</b> <code>$DEVICE</code>
 <b>• ANDROID VERSION:</b> <code>$ANDROID_VERSION</code>
 <b>• JOBS:</b> <code>$CONFIG_COMPILE_JOBS Cores</code>
-<b>• TYPE:</b> <code>$([ "$OFFICIAL" == "1" ] && echo "Official" || echo "Unofficial")</code>
+<b>• TYPE:</b> <code>$([ "$CONFIG_OFFICIAL_FLAG" == "1" ] && echo "Official" || echo "Unofficial")</code>
 <b>• PROGRESS</b>: <code>Brunching...</code>"
 
 build_message_id=$(send_message "$build_start_message" "$CONFIG_CHATID")
@@ -311,7 +301,7 @@ until [ -z "$(jobs -r)" ]; do
 <b>• DEVICE:</b> <code>$DEVICE</code>
 <b>• ANDROID VERSION:</b> <code>$ANDROID_VERSION</code>
 <b>• JOBS:</b> <code>$CONFIG_COMPILE_JOBS Cores</code>
-<b>• TYPE:</b> <code>$([ "$OFFICIAL" == "1" ] && echo "Official" || echo "Unofficial")</code>
+<b>• TYPE:</b> <code>$([ "$CONFIG_OFFICIAL_FLAG" == "1" ] && echo "Official" || echo "Unofficial")</code>
 <b>• PROGRESS:</b> <code>$(fetch_progress)</code>"
 
     edit_message "$build_progress_message" "$CONFIG_CHATID" "$build_message_id"
@@ -327,7 +317,7 @@ build_progress_message="🟡 | <i>Compiling ROM...</i>
 <b>• DEVICE:</b> <code>$DEVICE</code>
 <b>• ANDROID VERSION:</b> <code>$ANDROID_VERSION</code>
 <b>• JOBS:</b> <code>$CONFIG_COMPILE_JOBS Cores</code>
-<b>• TYPE:</b> <code>$([ "$OFFICIAL" == "1" ] && echo "Official" || echo "Unofficial")</code>
+<b>• TYPE:</b> <code>$([ "$CONFIG_OFFICIAL_FLAG" == "1" ] && echo "Official" || echo "Unofficial")</code>
 <b>• PROGRESS:</b> <code>$(fetch_progress)</code>"
 
 edit_message "$build_progress_message" "$CONFIG_CHATID" "$build_message_id"
@@ -368,7 +358,7 @@ else
 <b>• ROM:</b> <code>$ROM_NAME</code>
 <b>• DEVICE:</b> <code>$DEVICE</code>
 <b>• ANDROID VERSION:</b> <code>$ANDROID_VERSION</code>
-<b>• TYPE:</b> <code>$([ "$OFFICIAL" == "1" ] && echo "Official" || echo "Unofficial")</code>
+<b>• TYPE:</b> <code>$([ "$CONFIG_OFFICIAL_FLAG" == "1" ] && echo "Official" || echo "Unofficial")</code>
 <b>• SIZE:</b> <code>$zip_file_size</code>
 <b>• MD5SUM:</b> <code>$zip_file_md5sum</code>
 <b>• ROM:</b> $zip_file_url
