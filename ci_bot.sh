@@ -341,15 +341,32 @@ else
     ota_file=$(ls "$OUT"/*ota*.zip | tail -n -1)
     rm "$ota_file"
 
-    zip_file=$(ls "$OUT"/*$DEVICE*.zip | tail -n -1)
-    vendor_boot=$(ls "$OUT"/vendor_boot.img | tail -n -2)
-    boot=$(ls "$OUT"/boot.img | tail -n -3)
+    mkdir $OUT/rom
+    cp $OUT/vendor_boot.img $OUT/rom
+    cp $OUT/boot.img $OUT/rom
+    cp $OUT/dtbo.img $OUT/rom
+    echo "require board=$DEVICE" > $OUT/rom/android-info.txt
+    cat <<EOF > $OUT/rom/fastboot-info.txt
+version 1
+flash boot
+flash vendor_boot
+flash dtbo
+reboot bootloader
+EOF
+    initial_zip_old=$(ls "$OUT"/*$DEVICE*.zip | tail -n -1)
+    initial_zip_new="${initial_zip_old%.zip}-initial-install.zip"
+    cd $OUT/rom
+    zip -r9 $initial_zip_new *
+    cd -
+    rm -rf $OUT/rom
+
+    zip_file=$(find "$OUT" -maxdepth 1 -type f -name *$DEVICE*.zip -size +500M -printf "%T@ %p\n" | sort -nr | head -n 1 | awk '{print $2}')
+    initial_install_zip=$(ls "$initial_zip_new" | tail -n -1)
 
     echo -e "$BOLD_GREEN\nStarting to upload the rom files now...$RESET\n"
 
     zip_file_url=$(upload_file "$zip_file")
-    vendor_boot_url=$(upload_file "$vendor_boot")
-    boot_url=$(upload_file "$boot")
+    initial_install_zip_url=$(upload_file "$initial_install_zip")
     zip_file_md5sum=$(md5sum $zip_file | awk '{print $1}')
     zip_file_size=$(ls -sh $zip_file | awk '{print $1}')
 
@@ -362,8 +379,7 @@ else
 <b>• SIZE:</b> <code>$zip_file_size</code>
 <b>• MD5SUM:</b> <code>$zip_file_md5sum</code>
 <b>• ROM:</b> $zip_file_url
-<b>• VENDOR_BOOT:</b> $vendor_boot_url
-<b>• BOOT:</b> $boot_url
+<b>• INITIAL INSTALL ZIP:</b> $initial_install_zip_url
 
 <i>Compilation took $HOURS hours(s) and $MINUTES minutes(s)</i>"
 
