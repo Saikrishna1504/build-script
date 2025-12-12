@@ -10,6 +10,10 @@ CONFIG_CHATID="-"
 CONFIG_BOT_TOKEN=""
 CONFIG_ERROR_CHATID=""
 
+# Rclone upload
+RCLONE_REMOTE=""
+RCLONE_FOLDER=""
+
 # Turning off server after build or no
 POWEROFF=""
 
@@ -120,10 +124,19 @@ pin_message() {
         -d message_id="$2"
 }
 
-upload_file() {
+upload_gofile() {
     SERVER=$(curl -X GET 'https://api.gofile.io/servers' | grep -Po '(store*)[^"]*' | tail -n 1)
     RESPONSE=$(curl -X POST https://${SERVER}.gofile.io/contents/uploadfile -F "file=@$1")
     HASH=$(echo "$RESPONSE" | grep -Po '(https://gofile.io/d/)[^"]*')
+
+    echo "$HASH"
+}
+
+upload_rclone() {
+    ZIPFILE=$1
+    ZIPNAME=$(basename $1)
+    rclone copy "$ZIPFILE" "$RCLONE_REMOTE:$RCLONE_FOLDER"
+    HASH=$(rclone link "$RCLONE_REMOTE:$RCLONE_FOLDER")
 
     echo "$HASH"
 }
@@ -365,8 +378,8 @@ EOF
 
     echo -e "$BOLD_GREEN\nStarting to upload the rom files now...$RESET\n"
 
-    zip_file_url=$(upload_file "$zip_file")
-    initial_install_zip_url=$(upload_file "$initial_install_zip")
+    zip_file_url=$(upload_rclone "$zip_file")
+    initial_install_zip_url=$(upload_gofile "$initial_install_zip")
     zip_file_md5sum=$(md5sum $zip_file | awk '{print $1}')
     zip_file_size=$(ls -sh $zip_file | awk '{print $1}')
 

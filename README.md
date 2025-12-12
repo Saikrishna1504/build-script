@@ -32,6 +32,12 @@ CONFIG_BOT_TOKEN=""
 # Set the Seconday chat/channel ID (IT will only send error logs to that)
 CONFIG_ERROR_CHATID=""
 
+# Set your rclone remote for uploading with rclone
+RCLONE_REMOTE=""
+
+# Set your rclone folder name for uploading with rclone
+RCLONE_FOLDER=""
+
 # Turn off server after build (save resource) [false/true]
 POWEROFF=""
 ```
