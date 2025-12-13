@@ -19,6 +19,7 @@ RCLONE_FOLDER=""
 POWEROFF=""
 
 # Script Constants. Required variables throughout the script.
+RED=$(tput setaf 1)
 YELLOW=$(tput setaf 3)
 BOLD=$(tput bold)
 RESET=$(tput sgr0)
@@ -161,10 +162,50 @@ upload_gofile() {
 
 upload_rclone() {
     ZIPFILE=$1
-    ZIPNAME=$(basename $1)
-    rclone copy "$ZIPFILE" "$RCLONE_REMOTE:$RCLONE_FOLDER"
-    HASH=$(rclone link "$RCLONE_REMOTE:$RCLONE_FOLDER")
-
+    ZIPNAME=$(basename "$1")
+    
+    # Check if file already exists and auto-rename if needed
+    REMOTE_FILE_LIST=$(rclone lsjson "$RCLONE_REMOTE:$RCLONE_FOLDER" 2>/dev/null | grep -o '"Name":"[^"]*"' | cut -d'"' -f4 || true)
+    
+    if echo "$REMOTE_FILE_LIST" | grep -q "^$ZIPNAME$"; then
+        # File exists, create new name with (1), (2), etc.
+        BASE="${ZIPNAME%.*}"
+        EXT="${ZIPNAME##*.}"
+        COUNT=1
+        NEW_NAME="${BASE} (${COUNT}).${EXT}"
+        
+        while echo "$REMOTE_FILE_LIST" | grep -q "^$NEW_NAME$"; do
+            COUNT=$((COUNT + 1))
+            NEW_NAME="${BASE} (${COUNT}).${EXT}"
+        done
+        
+        echo -e "$YELLOW\n⚠️  File exists. Auto-renaming to: $NEW_NAME$RESET"
+        
+        # Create temporary copy with new name
+        TMP="/tmp/$NEW_NAME"
+        cp "$ZIPFILE" "$TMP"
+        ZIPFILE="$TMP"
+        ZIPNAME="$NEW_NAME"
+    fi
+    
+    # Upload the file
+    rclone copy "$ZIPFILE" "$RCLONE_REMOTE:$RCLONE_FOLDER" \
+        --progress \
+        --transfers 1 \
+        --checkers 8 \
+        --retries 5 \
+        --low-level-retries 20 \
+        --timeout 1m \
+        --contimeout 1m
+    
+    # Get shareable link
+    HASH=$(rclone link "$RCLONE_REMOTE:$RCLONE_FOLDER/$ZIPNAME" 2>/dev/null || true)
+    
+    # Clean up temporary file if created
+    if [[ "$ZIPFILE" == /tmp/* ]]; then
+        rm -f "$ZIPFILE"
+    fi
+    
     echo "$HASH"
 }
 
@@ -291,7 +332,7 @@ if [[ -n $SYNC ]]; then
     if [[ -n $SYNC_END ]]; then
         DIFFERENCE=$((SYNC_END - SYNC_START))
         MINUTES=$((($DIFFERENCE % 3600) / 60))
-        SECONDS=$(((($DIFFERENCE % 3600) / 60) / 60))
+        SECONDS=$(($DIFFERENCE % 60))
 
         sync_finished_message="🟢 | <i>Sources synced!!</i>
 
@@ -443,8 +484,8 @@ if [ -s "out/error.log" ]; then
     
 <i>Check out the log below!</i>"
 
-    edit_message_to_error_chat "$build_failed_message" "$CONFIG_ERROR_CHATID" "$build_message_id"
-    send_file_to_error_chat "out/error.log" "$CONFIG_ERROR_CHATID"
+    send_message_to_error_chat "$build_failed_message"
+    send_file_to_error_chat "out/error.log"
 #     send_sticker "$STICKER_URL" "$CONFIG_CHATID"
 else
     zip_file=$(find "$OUT" -maxdepth 1 -type f -name *$DEVICE*.zip -size +500M -printf "%T@ %p\n" | sort -nr | head -n 1 | awk '{print $2}')
