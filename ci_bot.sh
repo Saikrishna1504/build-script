@@ -168,6 +168,33 @@ upload_rclone() {
     echo "$HASH"
 }
 
+# Smart upload function with fallback
+upload_file() {
+    local FILE=$1
+    local UPLOAD_URL=""
+    
+    # Check if rclone is configured
+    if [ -n "$RCLONE_REMOTE" ] && [ -n "$RCLONE_FOLDER" ]; then
+        echo -e "$BOLD_GREEN\nUploading $(basename $FILE) via rclone...$RESET"
+        UPLOAD_URL=$(upload_rclone "$FILE")
+        
+        # Check if rclone upload was successful
+        if [ -n "$UPLOAD_URL" ]; then
+            echo "$UPLOAD_URL"
+            return 0
+        else
+            echo -e "$YELLOW\nRclone upload failed, falling back to GoFile...$RESET"
+        fi
+    else
+        echo -e "$YELLOW\nRclone not configured, using GoFile...$RESET"
+    fi
+    
+    # Fallback to GoFile
+    echo -e "$BOLD_GREEN\nUploading $(basename $FILE) via GoFile...$RESET"
+    UPLOAD_URL=$(upload_gofile "$FILE")
+    echo "$UPLOAD_URL"
+}
+
 send_message_to_error_chat() {
     local response=$(curl -s -X POST "$BOT_MESSAGE_URL" -d chat_id="$CONFIG_ERROR_CHATID" \
         -d "parse_mode=html" \
@@ -424,18 +451,18 @@ else
 
     echo -e "$BOLD_GREEN\nStarting to upload the rom files now...$RESET\n"
 
-    zip_file_url=$(upload_rclone "$zip_file")
+    zip_file_url=$(upload_file "$zip_file")
     zip_file_md5sum=$(md5sum $zip_file | awk '{print $1}')
     zip_file_size=$(ls -sh $zip_file | awk '{print $1}')
 
     # Only upload boot images if vendor_boot.img exists
     if [ -f "$OUT/vendor_boot.img" ]; then
-        vendor_boot_url=$(upload_rclone "$OUT/vendor_boot.img")
+        vendor_boot_url=$(upload_file "$OUT/vendor_boot.img")
         vendor_boot_line="<b>• VENDOR_BOOT:</b> $vendor_boot_url"
         
         # Upload boot.img if exists
         if [ -f "$OUT/boot.img" ]; then
-            boot_url=$(upload_rclone "$OUT/boot.img")
+            boot_url=$(upload_file "$OUT/boot.img")
             boot_line="<b>• BOOT:</b> $boot_url"
         else
             boot_line=""
@@ -443,7 +470,7 @@ else
         
         # Upload init_boot.img if exists
         if [ -f "$OUT/init_boot.img" ]; then
-            init_boot_url=$(upload_rclone "$OUT/init_boot.img")
+            init_boot_url=$(upload_file "$OUT/init_boot.img")
             init_boot_line="<b>• INIT_BOOT:</b> $init_boot_url"
         else
             init_boot_line=""
