@@ -4,6 +4,7 @@
 DEVICE=""
 VARIANT=""
 CONFIG_OFFICIAL_FLAG=""
+ROM_TYPE=""  # Set to "axion-pico", "axion-core", "axion-vanilla" for AxionAOSP, leave empty for standard ROMs (LineageOS, etc.)
 
 # Telegram Configuration
 CONFIG_CHATID="-"
@@ -29,6 +30,32 @@ ROM_NAME="$(sed "s#.*/##" <<<"$(pwd)")"
 ANDROID_VERSION=$(grep -oP '(?<=android-)[0-9]+' .repo/manifests/default.xml | head -n1)
 OUT="$(pwd)/out/target/product/$DEVICE"
 STICKER_URL="https://index.sauraj.eu.org/api/raw/?path=/sticker.webp"
+
+# Parse ROM type and GMS variant for AxionAOSP
+if [[ "$ROM_TYPE" == axion-* ]]; then
+    # Extract GMS type from ROM_TYPE (e.g., axion-pico -> pico)
+    AXION_GMS_TYPE="${ROM_TYPE#axion-}"
+    ROM_TYPE_BASE="axion"
+    
+    # Set GMS variant based on type
+    case "$AXION_GMS_TYPE" in
+        pico)
+            AXION_VARIANT="gms pico"
+            ;;
+        core)
+            AXION_VARIANT="gms core"
+            ;;
+        vanilla)
+            AXION_VARIANT="vanilla"
+            ;;
+        *)
+            echo -e "${RED}Invalid AxionAOSP type: $AXION_GMS_TYPE. Use axion-pico, axion-core, or axion-vanilla${RESET}"
+            exit 1
+            ;;
+    esac
+else
+    ROM_TYPE_BASE="${ROM_TYPE:-standard}"
+fi
 
 # CLI parameters. Fetch whatever input the user has provided.
 while [[ $# -gt 0 ]]; do
@@ -221,6 +248,7 @@ if [[ -n $SYNC ]]; then
     SYNC_START=$(TZ=Asia/Kolkata date +"%s")
 
     echo -e "$BOLD_GREEN\nStarting to sync sources now...$RESET\n"
+    
     if ! repo sync -c -j$CONFIG_SYNC_JOBS --force-sync --no-clone-bundle --no-tags; then
         echo -e "$RED\nInitial sync has failed!!$RESET" && echo -e "$BOLD_GREEN\nTrying to sync again with lesser arguments...$RESET\n"
 
@@ -285,21 +313,62 @@ BUILD_START=$(TZ=Asia/Kolkata date +"%s")
 
 # Start Compilation. Compile the ROM according to the configuration.
 echo -e "$BOLD_GREEN\nSetting up the build environment...$RESET"
-source build/envsetup.sh
 
-if [ $? -eq 0 ]; then
-    echo -e "$BOLD_GREEN\nStarting to build now...$RESET" 
-    brunch "$DEVICE" "$VARIANT" 2>&1 | tee -a "$ROOT_DIRECTORY/build.log" &
+if [ "$ROM_TYPE_BASE" = "axion" ]; then
+    # AxionAOSP build process
+    echo -e "$BOLD_GREEN\nConfiguring device for AxionAOSP ($AXION_GMS_TYPE)...$RESET"
+    source build/envsetup.sh
+    
+    if [ $? -eq 0 ]; then
+        # Run axion device configuration
+        # axion usage: axion <device_codename> [user|userdebug|eng] [gms [pico|core] | vanilla]
+        # VARIANT contains build variant (user/userdebug/eng), AXION_VARIANT contains GMS type
+        axion "$DEVICE" $VARIANT $AXION_VARIANT
+        
+        if [ $? -eq 0 ]; then
+            echo -e "$BOLD_GREEN\nStarting AxionAOSP build now...$RESET"
+            # ax usage: ax [-b|-fb|-br] [-j<num>] [user|eng|userdebug]
+            ax -br -j$CONFIG_COMPILE_JOBS 2>&1 | tee -a "$ROOT_DIRECTORY/build.log" &
+        else
+            echo -e "$RED\nFailed to configure $DEVICE for AxionAOSP$RESET"
+            
+            build_failed_message="🔴 | <i>ROM compilation failed...</i>
+    
+<i>Failed at configuring $DEVICE for AxionAOSP...</i>"
+
+            edit_message "$build_failed_message" "$CONFIG_CHATID" "$build_message_id"
+            send_sticker "$STICKER_URL" "$CONFIG_CHATID"
+            exit 1
+        fi
+    else
+        echo -e "$RED\nFailed to setup build environment$RESET"
+        
+        build_failed_message="🔴 | <i>ROM compilation failed...</i>
+    
+<i>Failed at setting up build environment...</i>"
+
+        edit_message "$build_failed_message" "$CONFIG_CHATID" "$build_message_id"
+        send_sticker "$STICKER_URL" "$CONFIG_CHATID"
+        exit 1
+    fi
 else
-    echo -e "$RED\nFailed to brunch "$DEVICE"$RESET"
+    # Standard ROM build process (LineageOS, etc.)
+    source build/envsetup.sh
 
-    build_failed_message="🔴 | <i>ROM compilation failed...</i>
+    if [ $? -eq 0 ]; then
+        echo -e "$BOLD_GREEN\nStarting to build now...$RESET" 
+        brunch "$DEVICE" "$VARIANT" 2>&1 | tee -a "$ROOT_DIRECTORY/build.log" &
+    else
+        echo -e "$RED\nFailed to brunch "$DEVICE"$RESET"
+
+        build_failed_message="🔴 | <i>ROM compilation failed...</i>
     
 <i>Failed at brunching $DEVICE...</i>"
 
-    edit_message "$build_failed_message" "$CONFIG_CHATID" "$build_message_id"
-    send_sticker "$STICKER_URL" "$CONFIG_CHATID"
-    exit 1
+        edit_message "$build_failed_message" "$CONFIG_CHATID" "$build_message_id"
+        send_sticker "$STICKER_URL" "$CONFIG_CHATID"
+        exit 1
+    fi
 fi
 
 # Contiounsly update the progress of the build.

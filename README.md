@@ -23,6 +23,13 @@ DEVICE=""
 # Your build variant : [user/userdebug/eng] 
 VARIANT=""
 
+# ROM type : Leave empty for standard ROMs (LineageOS, AOSP, etc.)
+#            For AxionAOSP use: "axion-pico" / "axion-core" / "axion-vanilla"
+ROM_TYPE=""
+
+# Official build flag : Set to "1" for official builds, leave empty for unofficial
+CONFIG_OFFICIAL_FLAG=""
+
 # Your telegram group/channel chatid eg - "-xxxxxxxx"
 CONFIG_CHATID=""
 
