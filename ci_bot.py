@@ -18,26 +18,27 @@ from datetime import datetime
 from threading import Thread
 
 # ============================================================================
-# CONFIGURATION - Edit these values
+# CONFIGURATION - Edit these values before running
 # ============================================================================
 
 # Build Configuration
-DEVICE = "" # ex: begonia
-VARIANT = "" # ex: userdebug
-CONFIG_OFFICIAL_FLAG = "" # "1" - official or "" - unofficial
-ROM_TYPE = ""  # "axion-pico", "axion-core", "axion-vanilla", or "" for standard
+DEVICE = ""                     # Your device codename (e.g., "cancunf", "begonia")
+VARIANT = ""                    # Build variant: "user", "userdebug", or "eng"
+CONFIG_OFFICIAL_FLAG = ""       # Set to "1" for official builds, leave "" for unofficial
+ROM_TYPE = ""                   # For AxionAOSP: "axion-pico", "axion-core", "axion-vanilla"
+                                # For standard ROMs (LineageOS, AOSP): leave ""
 
 # Telegram Configuration
-CONFIG_CHATID = ""
-CONFIG_BOT_TOKEN = ""
-CONFIG_ERROR_CHATID = ""
+CONFIG_CHATID = ""              # Your Telegram chat/group ID (e.g., "-100123")
+CONFIG_BOT_TOKEN = ""           # Your bot token from @BotFather
+CONFIG_ERROR_CHATID = ""        # Chat ID for error logs (can be same as CONFIG_CHATID)
 
-# Rclone Configuration
-RCLONE_REMOTE = ""
-RCLONE_FOLDER = ""
+# Rclone Configuration (Optional - will use GoFile as fallback)
+RCLONE_REMOTE = ""              # Your rclone remote name (e.g., "gdrive", "drive")
+RCLONE_FOLDER = ""              # Folder path in remote (leave "" if remote points to folder root)
 
-# Power off after build
-POWEROFF = False
+# Power Management
+POWEROFF = False                # Set to True to shutdown server after build completes
 
 # ============================================================================
 # GLOBALS
@@ -131,7 +132,7 @@ def send_file(file_path, chat_id=None):
         print(f"Error sending file: {e}", file=sys.stderr)
     return None
 
-def edit_message(message_id, text, chat_id=None):
+def edit_message(message_id, text, chat_id=None, reply_markup=None):
     """Edit text message"""
     if chat_id is None:
         chat_id = CONFIG_CHATID
@@ -145,15 +146,18 @@ def edit_message(message_id, text, chat_id=None):
         'disable_web_page_preview': True
     }
     
+    if reply_markup:
+        data['reply_markup'] = reply_markup
+    
     try:
-        response = requests.post(url, data=data, timeout=30)
+        response = requests.post(url, json=data, timeout=30)
         result = response.json()
         if not result.get('ok') and 'not modified' not in result.get('description', ''):
             print(f"Error editing message: {result.get('description')}", file=sys.stderr)
     except Exception as e:
         print(f"Error editing message: {e}", file=sys.stderr)
 
-def edit_photo_caption(message_id, caption, chat_id=None):
+def edit_photo_caption(message_id, caption, chat_id=None, reply_markup=None):
     """Edit photo caption"""
     if chat_id is None:
         chat_id = CONFIG_CHATID
@@ -166,13 +170,42 @@ def edit_photo_caption(message_id, caption, chat_id=None):
         'parse_mode': 'HTML'
     }
     
+    if reply_markup:
+        data['reply_markup'] = reply_markup
+    
     try:
-        response = requests.post(url, data=data, timeout=30)
+        response = requests.post(url, json=data, timeout=30)
         result = response.json()
         if not result.get('ok') and 'not modified' not in result.get('description', ''):
             print(f"Error editing caption: {result.get('description')}", file=sys.stderr)
     except Exception as e:
         print(f"Error editing caption: {e}", file=sys.stderr)
+
+def create_download_buttons(rom_url, boot_images=None):
+    """Create inline keyboard with download buttons"""
+    buttons = []
+    
+    # ROM download button (always first)
+    buttons.append([{"text": "📥 Download ROM", "url": rom_url}])
+    
+    # Boot image buttons (if provided)
+    if boot_images:
+        boot_row = []
+        for img_name, img_url in boot_images.items():
+            # Create button text without emoji
+            button_text = img_name.replace('.img', '').replace('_', ' ').title()
+            boot_row.append({"text": button_text, "url": img_url})
+            
+            # Add row if we have 2 buttons (max 2 per row for readability)
+            if len(boot_row) == 2:
+                buttons.append(boot_row)
+                boot_row = []
+        
+        # Add remaining buttons
+        if boot_row:
+            buttons.append(boot_row)
+    
+    return {"inline_keyboard": buttons}
 
 # ============================================================================
 # BANNER GENERATION
@@ -407,13 +440,21 @@ def monitor_progress():
         time.sleep(5)
 
 def upload_gofile(file_path):
-    """Upload file to GoFile"""
+    """Upload file to GoFile with progress"""
+    file_name = os.path.basename(file_path)
+    file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
+    
+    print(f"📤 Uploading via GoFile: {file_name} ({file_size_mb:.2f} MB)")
+    
     try:
         # Get server
+        print("Getting server...")
         response = requests.get('https://api.gofile.io/servers', timeout=30)
         server = response.json()['data']['servers'][0]['name']
+        print(f"Server: {server}")
         
         # Upload file
+        print("Uploading to GoFile (this may take a while)...")
         with open(file_path, 'rb') as f:
             files = {'file': f}
             response = requests.post(
@@ -424,36 +465,108 @@ def upload_gofile(file_path):
         
         result = response.json()
         if result.get('status') == 'ok':
+            print("✅ Upload complete!")
             return result['data']['downloadPage']
-    except:
-        pass
+        else:
+            print(f"❌ Upload failed: {result}")
+    except Exception as e:
+        print(f"❌ Error: {e}")
+    
     return None
 
 def upload_rclone(file_path):
-    """Upload file via rclone"""
+    """Upload file via rclone with progress and duplicate handling"""
+    file_name = os.path.basename(file_path)
+    file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
+    
+    # Build rclone path (handle empty folder)
+    if RCLONE_FOLDER:
+        rclone_dest = f'{RCLONE_REMOTE}:{RCLONE_FOLDER}'
+        base_path = f'{RCLONE_REMOTE}:{RCLONE_FOLDER}'
+    else:
+        rclone_dest = f'{RCLONE_REMOTE}:'
+        base_path = f'{RCLONE_REMOTE}:'
+    
+    print(f"📤 Uploading via rclone: {file_name} ({file_size_mb:.2f} MB)")
+    print(f"   Destination: {rclone_dest}")
+    
     try:
-        # Upload file
-        subprocess.run([
-            'rclone', 'copy', file_path,
-            f'{RCLONE_REMOTE}:{RCLONE_FOLDER}',
-            '--progress'
-        ], check=True, capture_output=True)
+        # Check if file already exists and find next available version
+        print("   Checking for existing file...")
+        original_name = file_name
+        name_parts = os.path.splitext(file_name)
+        version = 0
+        
+        while True:
+            check_path = f'{base_path}/{file_name}' if base_path.endswith(':') else f'{base_path}/{file_name}'
+            check_result = subprocess.run([
+                'rclone', 'lsf', check_path
+            ], capture_output=True, text=True)
+            
+            if check_result.returncode == 0 and check_result.stdout.strip():
+                # File exists, try next version
+                version += 1
+                file_name = f"{name_parts[0]} ({version}){name_parts[1]}"
+                print(f"   ⚠️  File exists, trying: {file_name}")
+            else:
+                # File doesn't exist, use this name
+                if version > 0:
+                    print(f"   ✅ Using versioned name: {file_name}")
+                break
+        
+        # If we need to rename the file locally for upload
+        upload_file = file_path
+        if file_name != original_name:
+            # Create a temporary renamed copy
+            temp_dir = os.path.dirname(file_path)
+            upload_file = os.path.join(temp_dir, file_name)
+            import shutil
+            shutil.copy2(file_path, upload_file)
+        
+        rclone_file_path = f'{base_path}/{file_name}' if base_path.endswith(':') else f'{base_path}/{file_name}'
+        
+        # Upload file with real-time output
+        process = subprocess.Popen([
+            'rclone', 'copy', upload_file, rclone_dest,
+            '--progress', '--stats', '1s'
+        ], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+        
+        # Print progress in real-time
+        for line in process.stdout:
+            line = line.strip()
+            if line and ('Transferred:' in line or '%' in line or 'ETA' in line):
+                print(f"   {line}")
+        
+        process.wait()
+        
+        # Clean up temp file if we created one
+        if upload_file != file_path and os.path.exists(upload_file):
+            os.remove(upload_file)
+        
+        if process.returncode != 0:
+            print("❌ Upload failed!")
+            return None
+        
+        print("✅ Upload complete!")
         
         # Get link
+        print("Getting shareable link...")
         result = subprocess.run([
-            'rclone', 'link',
-            f'{RCLONE_REMOTE}:{RCLONE_FOLDER}/{os.path.basename(file_path)}'
-        ], capture_output=True, text=True, check=True)
+            'rclone', 'link', rclone_file_path
+        ], capture_output=True, text=True)
         
-        return result.stdout.strip()
-    except:
-        pass
-    return None
+        if result.returncode == 0:
+            return result.stdout.strip()
+        else:
+            return rclone_file_path
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        return None
 
 def upload_file(file_path):
     """Smart upload with fallback"""
-    # Try rclone first if configured
-    if RCLONE_REMOTE and RCLONE_FOLDER:
+    # Try rclone first if configured (RCLONE_FOLDER can be empty)
+    if RCLONE_REMOTE:
         url = upload_rclone(file_path)
         if url:
             return url
@@ -513,7 +626,7 @@ def handle_interrupt(signum, frame):
 # ============================================================================
 
 def main():
-    global OUT_DIR, ANDROID_VERSION, GITHUB_ORG_AVATAR
+    global OUT_DIR, ANDROID_VERSION, GITHUB_ORG_AVATAR, ROM_NAME
     global build_message_id, use_banner, build_process
     
     # Parse arguments
@@ -528,10 +641,9 @@ def main():
     
     print("🚀 CI Bot - Starting build process...")
     
-    # Get Android version and GitHub info
+    # Get ROM info from manifest repository
     print("📄 Getting ROM info from manifest repository...")
     
-    # Get GitHub org from manifest repo's git remote
     manifest_repo = os.path.join(ROOT_DIRECTORY, '.repo/manifests')
     if os.path.exists(manifest_repo):
         try:
@@ -547,27 +659,49 @@ def main():
                 print(f"📡 Manifest remote: {remote_url}")
                 
                 # Extract org from GitHub URL
+                # Formats: https://github.com/ORG/REPO or git@github.com:ORG/REPO
                 match = re.search(r'github\.com[:/]([^/]+)', remote_url)
                 if match:
                     github_org = match.group(1)
+                    
+                    # Use GitHub org as ROM name directly
+                    ROM_NAME = github_org
                     GITHUB_ORG_AVATAR = f"https://github.com/{github_org}.png?size=200"
-                    print(f"✅ Found GitHub org: {github_org}")
+                    
+                    print(f"✅ Found ROM: {ROM_NAME}")
                     print(f"🔗 Avatar URL: {GITHUB_ORG_AVATAR}")
         except Exception as e:
             print(f"⚠️  Could not get manifest remote: {e}")
+            print(f"⚠️  Using directory name as ROM name: {ROM_NAME}")
     
     # Get Android version from manifest
-    manifest_file = os.path.join(ROOT_DIRECTORY, '.repo/manifest.xml')
-    if os.path.exists(manifest_file):
-        try:
-            with open(manifest_file, 'r') as f:
-                content = f.read()
-                match = re.search(r'android-(\d+)', content)
-                if match:
-                    ANDROID_VERSION = match.group(1)
-                    print(f"✅ Found Android version: {ANDROID_VERSION}")
-        except:
-            pass
+    def detect_android_version():
+        """Detect Android version from .repo/manifests/default.xml"""
+        
+        # Check .repo/manifests/default.xml for AOSP revision tag
+        default_manifest = os.path.join(ROOT_DIRECTORY, '.repo/manifests/default.xml')
+        if os.path.exists(default_manifest):
+            try:
+                with open(default_manifest, 'r') as f:
+                    content = f.read()
+                    # Look for revision="refs/tags/android-16.0.0_r1" or similar
+                    match = re.search(r'revision="refs/tags/android-(\d+)\.', content)
+                    if match:
+                        return match.group(1)
+                    # Also try android-XX.X.X_rX format anywhere in file
+                    match = re.search(r'android-(\d+)\.\d+\.\d+', content)
+                    if match:
+                        return match.group(1)
+            except:
+                pass
+        
+        return "Unknown"
+    
+    ANDROID_VERSION = detect_android_version()
+    if ANDROID_VERSION != "Unknown":
+        print(f"✅ Found Android version: {ANDROID_VERSION}")
+    else:
+        print(f"⚠️  Could not detect Android version, using 'Unknown'")
     
     OUT_DIR = os.path.join(ROOT_DIRECTORY, f"out/target/product/{DEVICE}")
     
@@ -632,7 +766,16 @@ def main():
         build_message_id = send_message(text)
     
     # Start build
-    print("🔨 Starting build...")
+    print("\n" + "=" * 70)
+    print("🔨 STARTING BUILD PROCESS")
+    print("=" * 70)
+    print(f"ROM: {ROM_NAME}")
+    print(f"Device: {DEVICE}")
+    print(f"Variant: {VARIANT}")
+    print(f"Type: {'Official' if CONFIG_OFFICIAL_FLAG == '1' else 'Unofficial'}")
+    if ROM_TYPE:
+        print(f"ROM Type: {ROM_TYPE}")
+    print("=" * 70 + "\n")
     
     # Track build start time
     build_start_time = time.time()
@@ -645,8 +788,12 @@ def main():
         gms_type = ROM_TYPE.split('-')[1]
         gms_variant = 'vanilla' if gms_type == 'vanilla' else f'gms {gms_type}'
         build_cmd = f'{env_cmd} && axion {DEVICE} {VARIANT} {gms_variant} && ax -br'
+        print(f"Build command: axion {DEVICE} {VARIANT} {gms_variant} && ax -br")
     else:
         build_cmd = f'{env_cmd} && brunch {DEVICE} {VARIANT}'
+        print(f"Build command: brunch {DEVICE} {VARIANT}")
+    
+    print(f"Log file: {BUILD_LOG}\n")
     
     # Start build process
     with open(BUILD_LOG, 'w') as log_file:
@@ -728,7 +875,7 @@ def main():
         rom_filename = os.path.basename(rom_zip)
         
         # Calculate SHA256
-        print("🔐 Calculating SHA256...")
+        print("🔍 Calculating SHA256...")
         sha256_hash = hashlib.sha256()
         with open(rom_zip, 'rb') as f:
             for chunk in iter(lambda: f.read(8192), b""):
@@ -762,7 +909,7 @@ def main():
         rom_url = upload_file(rom_zip)
         
         # Upload boot images only if vendor_boot.img exists
-        boot_lines = []
+        boot_images = {}
         vendor_boot_path = os.path.join(OUT_DIR, 'vendor_boot.img')
         if os.path.exists(vendor_boot_path):
             # Update message for boot images
@@ -783,19 +930,13 @@ def main():
                 if os.path.exists(img_path):
                     print(f"📤 Uploading {img_name}...")
                     img_url = upload_file(img_path)
-                    boot_lines.append(f"<b>• {img_name.upper().replace('.IMG', '')}:</b> {img_url}")
-        
-        boot_text = '\n'.join(boot_lines) if boot_lines else ''
+                    boot_images[img_name] = img_url
         
         # Build the success message
         success_msg = f"""<b>✅ {ROM_NAME} Build Complete!</b>
 
 <b>Device:</b> {DEVICE} | <b>Android:</b> {ANDROID_VERSION}
 <b>Type:</b> {'Official' if CONFIG_OFFICIAL_FLAG == '1' else 'Unofficial'} | <b>Build Type:</b> {VARIANT}
-
-<b>📦 Downloads:</b>
-<b>• ROM:</b> {rom_url}
-{boot_text}
 
 <b>📊 Build Stats:</b>
 <b>• Duration:</b> {hours} hour(s), {minutes} minute(s), {seconds} second(s)
@@ -806,22 +947,40 @@ def main():
 <b>• Size:</b> {size_gb:.2f} GiB
 <b>• SHA256:</b> <code>{sha256sum}</code>"""
         
+        # Create download buttons
+        download_buttons = create_download_buttons(rom_url, boot_images if boot_images else None)
+        
         if use_banner:
-            edit_photo_caption(build_message_id, success_msg)
+            edit_photo_caption(build_message_id, success_msg, reply_markup=download_buttons)
         else:
-            edit_message(build_message_id, success_msg)
+            edit_message(build_message_id, success_msg, reply_markup=download_buttons)
         
         # Send build.log
         if os.path.exists(BUILD_LOG):
             send_file(BUILD_LOG)
     
-    # Cleanup
-    for f in ['build_banner.png', 'github_avatar.png', 'avatar_circle.png']:
+    # Cleanup temporary files
+    print("\n🧹 Cleaning up temporary files...")
+    for f in ['build_banner.png', 'rom_logo.png', 'logo_circle.png']:
         path = os.path.join(ROOT_DIRECTORY, f)
         if os.path.exists(path):
             os.remove(path)
+            print(f"   Removed: {f}")
     
-    print("✅ Done!")
+    print("\n" + "=" * 70)
+    print("✅ CI Bot completed successfully!")
+    print("=" * 70)
+    
+    # Power off if configured
+    if POWEROFF:
+        print("\n⚠️  POWEROFF is enabled - shutting down in 10 seconds...")
+        print("   Press Ctrl+C to cancel")
+        try:
+            time.sleep(10)
+            print("🔌 Shutting down system...")
+            subprocess.run(['sudo', 'poweroff'], check=False)
+        except KeyboardInterrupt:
+            print("\n⚠️  Shutdown cancelled by user")
 
 if __name__ == "__main__":
     main()
