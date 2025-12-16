@@ -87,3 +87,9 @@ pip install requests
 sudo apt install imagemagick rclone git
 ```
 
+### Credits
+
+Initial reference and base taken from  
+[Build-Script](https://github.com/hipexscape/Build-Script) by [hipexscape](https://github.com/hipexscape).
+
+Banner idea/reference by [Shra1V32](https://github.com/Shra1V32).
