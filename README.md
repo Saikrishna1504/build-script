@@ -73,6 +73,9 @@ RCLONE_REMOTE = ""
 # Set your rclone folder name for uploading with rclone
 RCLONE_FOLDER = ""
 
+# Banner theme (Optional)
+BANNER_THEME = "deepSpace"  # deepSpace, sunset, ocean, forest, matrix, cyberpunk
+
 # Turn off server after build (save resource) [False/True]
 POWEROFF = False
 ```
@@ -80,11 +83,14 @@ POWEROFF = False
 ### Requirements
 
 ```bash
-# Python packages
-pip install requests
+# Python packages (Debian/Ubuntu)
+sudo apt install python3-requests python3-pil
 
-# System tools
-sudo apt install imagemagick rclone git
+# Python packages (Arch Linux)
+sudo pacman -S python-requests python-pillow
+
+# Optional: Install rclone for cloud uploads
+sudo apt install rclone git
 ```
 
 ### Credits
