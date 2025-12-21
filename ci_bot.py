@@ -55,6 +55,9 @@ POWEROFF = False                # Set to True to shutdown server after build com
 # OTA JSON Upload(Optional)
 UPLOAD_OTA_JSON = True          # Set to True to upload OTA JSON to termbin.com
 
+# Custom JSON path
+OTA_JSON_PATH = "vendor/ota/your_device_name.json"    # Set your json path here 
+
 # Pin Message Configuration
 PIN_SUCCESS_MESSAGE = True      # Set to True to pin success message in chat
 
@@ -1049,61 +1052,47 @@ def main():
         
         # Upload OTA JSON for AxionAOSP builds
         ota_json_url = None
+                
         if ROM_TYPE.startswith('axion-') and UPLOAD_OTA_JSON:
+            # --- AXION ROM LOGIC (Original Path/Termbin) ---
             gms_type = ROM_TYPE.split('-')[1]
-            # Map pico/core to GMS, vanilla to VANILLA
             ota_dir = 'GMS' if gms_type in ['pico', 'core'] else 'VANILLA'
-            # OTA JSON is named as {device}.json (e.g., begonia.json)
             ota_json_path = os.path.join(OUT_DIR, ota_dir, f'{DEVICE}.json')
             
+            print(f"\n🔎 Checking for Axion OTA JSON ({ota_dir}) at: {ota_json_path}")
+
             if os.path.exists(ota_json_path):
-                # Upload OTA JSON content to termbin.com only
-                print(f"📤 Uploading OTA JSON ({ota_dir}) to termbin.com...")
+                print("📤 Uploading Axion OTA JSON to termbin.com...")
                 termbin_url = upload_termbin(ota_json_path)
                 if termbin_url:
                     ota_json_url = termbin_url
-                    print(f"✅ OTA JSON termbin URL: {ota_json_url}")
+                    print(f"✅ Axion OTA JSON termbin URL: {ota_json_url}")
+                else:
+                    print("❌ Failed to upload Axion OTA JSON via upload_termbin.")
             else:
-                print(f"⚠️  OTA JSON not found at: {ota_json_path}")
+                print(f"⚠️  Axion OTA JSON not found at: {ota_json_path}")
+
+        elif UPLOAD_OTA_JSON and OTA_JSON_PATH:
+            # --- NON-AXION ROM LOGIC (User-Defined Path/GoFile) ---
+
+            ota_json_path = os.path.abspath(OTA_JSON_PATH)
+            
+            print(f"\n🔎 Checking for Non-Axion OTA JSON at user-defined path: {ota_json_path}")
+            
+            if os.path.exists(ota_json_path):
+                gofile_url = upload_gofile(ota_json_path)
+                
+                if gofile_url:
+                    ota_json_url = gofile_url
+                    print(f"✅ OTA JSON gofile URL: {ota_json_url}")
+                else:
+                    print("❌ Failed to upload OTA JSON via upload_gofile.")
+            else:
+                print(f"⚠️  OTA JSON not found at: {ota_json_path}. Skipping upload.")
+        
         elif UPLOAD_OTA_JSON:
-            # Generate OTA JSON for non-Axion ROMs (only if UPLOAD_OTA_JSON is enabled)
-            print("📝 Generating OTA JSON...")
-            
-            # Extract version from filename or use Android version
-            version_match = re.search(r'[-_](\d+\.\d+(?:\.\d+)?)', rom_filename)
-            version = version_match.group(1) if version_match else ANDROID_VERSION
-            
-            # Determine ROM type
-            romtype = "OFFICIAL" if CONFIG_OFFICIAL_FLAG == '1' else "UNOFFICIAL"
-            
-            # Create OTA JSON structure
-            ota_data = {
-                "response": [
-                    {
-                        "datetime": int(time.time()),
-                        "filename": rom_filename,
-                        "id": md5_hash.hexdigest(),
-                        "romtype": romtype,
-                        "size": rom_size_bytes,
-                        "url": "",
-                        "version": version
-                    }
-                ]
-            }
-            
-            # Save OTA JSON
-            ota_json_path = os.path.join(OUT_DIR, f'{DEVICE}.json')
-            with open(ota_json_path, 'w') as f:
-                json.dump(ota_data, f, indent=4)
-            
-            print(f"✅ OTA JSON generated: {ota_json_path}")
-            
-            # Upload OTA JSON to termbin.com only
-            print("📤 Uploading OTA JSON to termbin.com...")
-            termbin_url = upload_termbin(ota_json_path)
-            if termbin_url:
-                ota_json_url = termbin_url
-                print(f"✅ OTA JSON termbin URL: {ota_json_url}")
+            print("\n❌ UPLOAD_OTA_JSON is enabled, but OTA_JSON_PATH is not defined for non-Axion ROMs.")
+
         
         # Final success message - Escape all dynamic content for HTML safety
         e_rom_name = html_escape(ROM_NAME)

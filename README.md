@@ -79,6 +79,9 @@ POWEROFF = False
 # Upload OTA JSON to termbin.com [True/False]
 UPLOAD_OTA_JSON = True
 
+# Custom JSON path, leave empty for axion, it only works if UPLOAD_OTA_JSON is set to true
+OTA_JSON_PATH = "vendor/ota/your_device_name.json"
+
 # Pin success message in chat [True/False]
 PIN_SUCCESS_MESSAGE = True
 ```
